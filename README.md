@@ -4,6 +4,8 @@
   <img src="IPATool/Assets.xcassets/AppIcon.appiconset/icon_512x512@2x.png" alt="IPATool App Icon" width="160" height="160">
 </p>
 
+[中文 README](README.zh-CN.md)
+
 A native macOS tool built with SwiftUI that integrates Apple account sign-in, app version lookup, license requests, chunked downloading, verification, and IPA metadata rewriting into a single desktop workbench.
 
 
