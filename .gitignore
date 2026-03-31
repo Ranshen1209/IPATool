@@ -4,3 +4,22 @@
 *.xcuserstate
 xcuserdata/
 *.xcworkspace/xcuserdata/
+
+# Xcode build outputs
+DerivedData/
+build/
+.build/
+.build-artifacts/
+
+# Archive and release packaging outputs
+*.dmg
+*.zip
+
+# Swift Package Manager
+.swiftpm/
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/
+fastlane/test_output/
