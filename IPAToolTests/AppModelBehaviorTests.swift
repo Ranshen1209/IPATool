@@ -93,6 +93,53 @@ final class AppModelBehaviorTests: XCTestCase {
         _ = await first.value
     }
 
+    func testSignInPresentsVerificationPromptWhenAppleChallengesTheSession() async throws {
+        let authService = RecordingAuthService(
+            session: .testSession,
+            signInHandler: { appleID, _, code in
+                if code == nil {
+                    throw AppError(
+                        title: "Authentication Failed",
+                        message: "MZFinance.BadLogin.Configurator_message",
+                        recoverySuggestion: "Check the Apple ID, password, verification code, and the private login protocol compatibility."
+                    )
+                }
+                return AppSession(
+                    appleID: appleID,
+                    displayName: "Tester",
+                    dsid: "1234567890",
+                    guid: "GUID",
+                    storeFront: "143441",
+                    authHeaders: ["X-Token": "token-abc"]
+                )
+            }
+        )
+
+        let model = AppModel(container: makeContainer(authService: authService))
+
+        let signInTask = Task {
+            await model.signIn(appleID: "tester@ipatool.local", password: "secret", code: "")
+        }
+
+        await waitUntil {
+            await MainActor.run { model.verificationPrompt != nil }
+        }
+
+        XCTAssertEqual(model.verificationPrompt?.appleID, "tester@ipatool.local")
+        model.submitVerificationCode("123456")
+        _ = await signInTask.value
+
+        let signInCalls = await authService.signInCalls
+        XCTAssertEqual(signInCalls.count, 2)
+        XCTAssertNil(signInCalls.first?.code)
+        XCTAssertEqual(signInCalls.last?.code, "123456")
+
+        if case .signedIn = model.sessionState {
+        } else {
+            XCTFail("Expected signedIn session state after verification.")
+        }
+    }
+
     private func makeContainer(
         authService: AuthServicing,
         purchaseService: PurchaseServicing = TestPurchaseService { _, _, _ in

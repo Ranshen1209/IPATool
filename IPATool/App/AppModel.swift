@@ -58,7 +58,7 @@ final class AppModel {
     func signIn(appleID: String, password: String, code: String) async {
         sessionState = .signingIn
         do {
-            let session = try await container.loginUseCase.execute(
+            let session = try await signInWithChallengeRecovery(
                 appleID: appleID,
                 password: password,
                 code: code.isEmpty ? nil : code
@@ -77,6 +77,45 @@ final class AppModel {
             sessionState = .failed(appError)
         }
         await refreshLogs()
+    }
+
+    private func signInWithChallengeRecovery(
+        appleID: String,
+        password: String,
+        code: String?
+    ) async throws -> AppSession {
+        do {
+            return try await container.loginUseCase.execute(
+                appleID: appleID,
+                password: password,
+                code: code
+            )
+        } catch let error as AppError
+            where code == nil && shouldPromptForVerification(after: error) {
+            await container.logStore.append(
+                level: .notice,
+                category: "auth",
+                message: "Apple sign-in for \(appleID) requires a verification code. Presenting the verification prompt."
+            )
+
+            let verificationCode = try await promptForVerificationCode(
+                appleID: appleID,
+                message: error.message
+            )
+            guard let verificationCode, !verificationCode.isEmpty else {
+                throw AppError(
+                    title: "Verification Cancelled",
+                    message: "The Apple sign-in flow was cancelled before a verification code was provided.",
+                    recoverySuggestion: "Retry sign-in and enter the verification code when prompted."
+                )
+            }
+
+            return try await container.loginUseCase.execute(
+                appleID: appleID,
+                password: password,
+                code: verificationCode
+            )
+        }
     }
 
     func signOut() async {
@@ -398,6 +437,25 @@ final class AppModel {
         return await withCheckedContinuation { continuation in
             verificationCodeContinuation = continuation
         }
+    }
+
+    private func shouldPromptForVerification(after error: AppError) -> Bool {
+        let title = error.title.lowercased()
+        let message = error.message.lowercased()
+
+        if title.contains("verification") || message.contains("verification") {
+            return true
+        }
+
+        if message.contains("badlogin.configurator_message") {
+            return true
+        }
+
+        if message.contains("two-factor") || message.contains("two factor") {
+            return true
+        }
+
+        return false
     }
 
     func dismissError() {
